@@ -1,4 +1,4 @@
-name: MLflow CI/CD Pipeline (Advance)
+name: MLflow CI
 
 on:
   push:
@@ -8,9 +8,12 @@ on:
 jobs:
   build-train-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout Repository
+    - name: Set up job
+      run: echo "Start MLflow CI/CD Pipeline"
+
+    - name: Run actions/checkout@v3
       uses: actions/checkout@v4
 
     - name: Set up Python 3.10
@@ -18,56 +21,65 @@ jobs:
       with:
         python-version: "3.10"
 
-    - name: Install Dependencies
+    - name: Check Env
+      run: |
+        python --version
+        pip --version
+
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Instal MLflow dan library pendukung
         pip install mlflow scikit-learn pandas numpy matplotlib
-        # Virtualenv dibutuhkan karena 'mlflow run' menggunakan env manager
-        pip install virtualenv 
+        pip install virtualenv
 
-    - name: Run MLflow Training
+    - name: Run mlflow project
       run: |
         cd MLProject
-        # Menjalankan project secara lokal
-        # Output (folder mlruns) akan terbentuk di dalam MLProject/
         mlflow run . --env-manager=local
-    
-    - name: Archive MLruns
+
+    - name: Get latest MLflow run id
       run: |
         cd MLProject
-        # Zip folder mlruns agar mudah diupload
-        zip -r mlruns_archive.zip mlruns
+        RUN_ID=$(ls mlruns/0 | head -n 1)
+        echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
 
-    - name: Upload Artifact to GitHub
-      uses: actions/upload-artifact@v4
-      with:
-        name: trained-model-artifact
-        path: MLProject/mlruns_archive.zip
+    - name: Install Python dependencies
+      run: |
+        echo "Dependencies already installed (step kept for parity)"
 
     - name: Upload to Google Drive
       uses: adityak74/google-drive-upload-git-action@main
       with:
-        # Pastikan secret GDRIVE_CREDENTIALS sudah diisi JSON Service Account
         credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-        filename: "MLProject/mlruns_archive.zip"
+        filename: MLProject/mlruns
         folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
-        name: "telco_churn_run_${{ github.run_id }}.zip"
+        name: "telco_churn_run_${{ github.run_id }}"
         overwrite: "true"
+        mirrorDirectoryStructure: "true"
 
-    - name: Build Docker Image with MLflow
-      run: |
-        cd MLProject
-        mlflow models build-docker \
-          -m "runs:/$(ls mlruns/0 | head -n 1)/model" \
-          -n ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow
-
-    - name: Login to Docker Hub
+    - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Build Docker Model
+      run: |
+        cd MLProject
+        mlflow build-docker \
+          -n ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow \
+          .
+
+    - name: Tag Docker Image
+      run: |
+        docker tag \
+          ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow \
+          ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow:${{ github.run_id }}
+
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow:${{ github.run_id }}
+
+    - name: Complete job
+      run: echo "Pipeline finished successfully"
