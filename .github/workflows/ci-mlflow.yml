@@ -66,9 +66,9 @@ jobs:
     - name: Build Docker Model
       run: |
         cd MLProject
-        mlflow build-docker \
-          -n ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow \
-          .
+        mlflow models build-docker \
+          -m runs:/latest \
+          -n ${{ secrets.DOCKERHUB_USERNAME }}/telco-churn-mlflow
 
     - name: Tag Docker Image
       run: |
