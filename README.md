@@ -1,6 +1,5 @@
 # Workflow-CI
 
-![CI Status](https://github.com/nikita74939/Workflow-CI/actions/workflows/main.yml/badge.svg)
 ![Docker](https://img.shields.io/badge/Docker-Hub-blue?logo=docker)
 ![MLflow](https://img.shields.io/badge/MLflow-Project-orange)
 
